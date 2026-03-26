@@ -1,0 +1,26 @@
+{
+  "name": "findmyfods",
+  "version": "1.0.0",
+  "description": "This is a recipe sharing site for those looking to make low-fodmap foods. Users will be able to filter recipes by any tags to find the right recipe for them.",
+  "homepage": "https://github.com/niman565/findmyfods#readme",
+  "bugs": {
+    "url": "https://github.com/niman565/findmyfods/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niman565/findmyfods.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "frontend": "cd frontend && npm run dev",
+    "backend": "cd backend && npm run dev",
+    "dev": "concurrently -n \"FRONTEND,BACKEND\" -c \"cyan,yellow\" --kill-others \"npm run frontend\" \"npm run backend\"",
+    "install-all": "npm install && cd frontend && npm install && cd ../backend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
