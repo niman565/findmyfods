@@ -133,15 +133,11 @@ export const TAGS = [
         category: "Special Restrictions",
     },
     {
-        name: "Dairy-free",
-        category: "Special Restrictions",
-    },
-    {
         name: "Nightshade-free",
         category: "Special Restrictions",
     },
     {
         name: "Allium-free",
         category: "Special Restrictions",
-    }
+    },
 ]
