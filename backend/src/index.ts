@@ -1,4 +1,4 @@
-import express, { Application, Request, Response } from 'express';
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -22,6 +22,11 @@ app.get('/', (req: Request, res: Response) => {
         favorites: '/api/favorites'
       }
     });
+});
+
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ error: err.message });
 });
 
 // Start server
