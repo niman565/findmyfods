@@ -6,7 +6,7 @@ export const UserRegisterSchema = z.object({
     password: z.string().min(8),
 });
 
-export const UserLoginSchema = z.object({
-    username: z.string().min(1),
-    password: z.string().min(8)
-});
+export const UserLoginSchema = z.xor([
+    z.object({ username: z.string().min(1), password: z.string().min(8) }),
+    z.object({ email: z.email(), password: z.string().min(8) }),
+]);

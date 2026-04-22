@@ -39,7 +39,7 @@ router.post('/register', async (req: Request, res: Response) => {
       maxAge: 3600 * 1000 // Cookie expiration time (1 hour)
     });
 
-    res.send('Logged in successfully!');
+    res.send('New user created and logged in successfully!');
 });
 
 export default router;
