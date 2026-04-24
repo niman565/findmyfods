@@ -1,15 +1,9 @@
 import express, { Request, Response } from 'express';
-import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from "argon2";
 import * as jwt from "jsonwebtoken";
 
-import { PrismaClient } from '../generated/prisma/client';
+import { prisma } from '../prisma-lib';
 import { UserRegisterSchema } from './validation_schemas/User';
-
-const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-});
-const prisma = new PrismaClient({ adapter });
 
 const secretKey = process.env.SECRET_KEY;
 if (!secretKey) throw new Error('No secret key found');
