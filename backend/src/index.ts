@@ -34,10 +34,6 @@ app.get('/', (req: Request, res: Response) => {
     });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   if (err instanceof z.ZodError) {
     res.status(400).json({ error: z.prettifyError(err)});
@@ -46,4 +42,9 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message });
 });
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+
 
