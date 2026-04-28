@@ -10,3 +10,7 @@ export const UserLoginSchema = z.xor([
     z.object({ username: z.string().min(1), password: z.string().min(8) }),
     z.object({ email: z.email(), password: z.string().min(8) }),
 ]);
+
+export const UserFavoriteAddOrDeleteSchema = z.object({
+    recipeId: z.coerce.number()
+});

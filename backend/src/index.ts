@@ -6,6 +6,7 @@ import * as z from 'zod';
 
 import loginRouter from './routes/login';
 import registerRouter from './routes/register';
+import favoritesRouter from './routes/favorites';
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.use(cookieParser());
 // Routes
 app.use('/api/auth', loginRouter);
 app.use('/api/auth', registerRouter);
+app.use('/api/favorites', favoritesRouter);
 
 // Test route
 app.get('/', (req: Request, res: Response) => {
