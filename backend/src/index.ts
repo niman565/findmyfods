@@ -1,14 +1,11 @@
+import 'dotenv/config';
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import * as z from 'zod';
-
-import loginRouter from './routes/login';
-import registerRouter from './routes/register';
-import favoritesRouter from './routes/favorites';
-
-dotenv.config();
+import ProtectedRouter from './routes/protected';
+import UnprotectedRouter from './routes/unprotected';
+import authMiddleware from './middleware/auth_middleware';
 
 const app: Application = express();
 const PORT = process.env.PORT || 5001;
@@ -19,9 +16,8 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
-app.use('/api/auth', loginRouter);
-app.use('/api/auth', registerRouter);
-app.use('/api/favorites', favoritesRouter);
+app.use('/api/', UnprotectedRouter);
+app.use('/api/', authMiddleware, ProtectedRouter);
 
 // Test route
 app.get('/', (req: Request, res: Response) => {
@@ -36,13 +32,24 @@ app.get('/', (req: Request, res: Response) => {
     });
 });
 
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof z.ZodError) {
-    res.status(400).json({ error: z.prettifyError(err)});
+    res.status(400).json({ error: z.prettifyError(err) });
     return;
   }
+  if ('code' in err) {
+    const code = (err as { code: string }).code;
+    if (code === 'P2002') {
+      res.status(409).json({ error: 'A record with those details already exists' });
+      return;
+    }
+    if (code === 'P2025') {
+      res.status(404).json({ error: 'Record not found' });
+      return;
+    }
+  }
   console.error(err.stack);
-  res.status(500).json({ error: err.message });
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {

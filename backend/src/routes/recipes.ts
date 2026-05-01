@@ -6,9 +6,6 @@ import { RecipeSpecificSchema } from './validation_schemas/Recipe';
 
 const router = express.Router();
 
-const secretKey = process.env.SECRET_KEY;
-if (!secretKey) throw new Error('No secret key found');
-
 router.get('/recipe/:id', async(req: Request, res: Response) => {
     const id = RecipeSpecificSchema.parse({id: req.params.id});
 
@@ -17,12 +14,15 @@ router.get('/recipe/:id', async(req: Request, res: Response) => {
     });
 
     if (!recipe) {
-        res.status(400).send("No recipe found for provided id")
+        res.status(404).json({ error: "No recipe found for provided id" });
+        return;
     }
 
     res.status(200).send(recipe);
 });
 
-router.get('/recipe', async(req: Request, res: Response) => {
-    res.send("Reached this endpoint successfully");
+router.get('/recipes', async(req: Request, res: Response) => {
+    res.json({ message: "Reached this endpoint successfully" });
 });
+
+export default router;

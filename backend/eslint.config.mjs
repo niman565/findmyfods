@@ -5,4 +5,10 @@ export default tseslint.config(
   { ignores: ['dist'] },
   js.configs.recommended,
   tseslint.configs.recommended,
+  {
+    rules: {
+      semi: ['error', 'always'],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
 )
