@@ -25,9 +25,11 @@ app.get('/', (req: Request, res: Response) => {
       message: 'Recipe API is running!',
       version: '1.0.0',
       endpoints: {
+        recipe: '/api/recipe',
         recipes: '/api/recipes',
         auth: '/api/auth',
-        favorites: '/api/favorites'
+        favorites: '/api/favorites',
+        logout: '/api/logout'
       }
     });
 });
