@@ -15,7 +15,7 @@ interface RecipeCreate {
 // --- Mock Prisma client ---
 
 function buildMockPrisma(existingTags: Tag[] = []) {
-    let tagStore: Tag[] = [...existingTags];
+    const tagStore: Tag[] = [...existingTags];
     let nextTagId = existingTags.length + 1;
     const recipeStore: RecipeCreate[] = [];
     const calls = { createMany: 0, findMany: 0, recipeCreate: 0 };
@@ -34,6 +34,7 @@ function buildMockPrisma(existingTags: Tag[] = []) {
                     tagStore.push({ ...tag, id: nextTagId++ });
                 }
             },
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             findMany: async ({ select }: { select: { id: boolean; name: boolean } }) => {
                 calls.findMany++;
                 return tagStore.map(t => ({ id: t.id, name: t.name }));

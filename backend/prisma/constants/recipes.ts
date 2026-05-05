@@ -59,4 +59,4 @@ export const RECIPES = [
         ],
         tags: ["Low-fodmap", "Gluten-free", "Dinner", "Nightshade-free", "Allium-free", "Soy-free", "Dairy-free", "Egg-free"],
     },
-]
+];

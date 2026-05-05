@@ -140,4 +140,4 @@ export const TAGS = [
         name: "Allium-free",
         category: "Special Restrictions",
     },
-]
+];
