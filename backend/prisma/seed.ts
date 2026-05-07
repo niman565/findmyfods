@@ -11,7 +11,10 @@ const prisma = new PrismaClient({ adapter });
 
 export const seed = async () => {
     await prisma.tag.createMany({
-        data: TAGS,
+        data: TAGS.map(TAG => {
+          TAG.name = TAG.name.toLowerCase();
+          return TAG;
+        }),
         skipDuplicates: true,
     });
     const tags = await prisma.tag.findMany({ select: { id: true, name: true } });
@@ -21,7 +24,7 @@ export const seed = async () => {
             ...recipe,
             tags: {
               create: (recipe.tags || []).map(tagName => ({
-                tagId: tags.find(t => t.name === tagName)!.id
+                tagId: tags.find(t => t.name === tagName.toLowerCase())!.id
               }))
             }
           }
