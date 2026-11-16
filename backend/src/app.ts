@@ -4,7 +4,6 @@ import cookieParser from 'cookie-parser';
 import * as z from 'zod';
 import ProtectedRouter from './routes/protected';
 import UnprotectedRouter from './routes/unprotected';
-import authMiddleware from './middleware/auth_middleware';
 
 // The app is built here and started in index.ts, so tests can import it
 // without opening a port. Environment variables are loaded by index.ts
@@ -17,8 +16,13 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
-app.use('/api/', UnprotectedRouter);
-app.use('/api/', authMiddleware, ProtectedRouter);
+app.use('/api', UnprotectedRouter);
+app.use('/api', ProtectedRouter);
+
+// Any other /api path
+app.use('/api', (req: Request, res: Response) => {
+    res.status(404).json({ error: 'Not found' });
+});
 
 // Test route
 app.get('/', (req: Request, res: Response) => {
@@ -26,18 +30,29 @@ app.get('/', (req: Request, res: Response) => {
       message: 'Recipe API is running!',
       version: '1.0.0',
       endpoints: {
-        recipe: '/api/recipe',
         recipes: '/api/recipes',
-        auth: '/api/auth',
-        favorites: '/api/favorites',
-        logout: '/api/logout'
+        recipe: '/api/recipe/:id',
+        register: '/api/auth/register',
+        login: '/api/auth/login',
+        logout: '/api/auth/logout',
+        me: '/api/auth/me',
+        favorites: '/api/favorites'
       }
     });
 });
 
+// express.json() reports a request body that is not valid JSON with this type.
+function isMalformedJsonError(err: Error): boolean {
+  return 'type' in err && err.type === 'entity.parse.failed';
+}
+
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof z.ZodError) {
     res.status(400).json({ error: z.prettifyError(err) });
+    return;
+  }
+  if (isMalformedJsonError(err)) {
+    res.status(400).json({ error: 'Request body is not valid JSON' });
     return;
   }
   if ('code' in err) {

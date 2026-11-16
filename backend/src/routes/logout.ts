@@ -1,24 +1,13 @@
 import express, { Request, Response } from 'express';
 
-import { prisma } from '../prisma-lib';
+import { endSession } from '../lib/session';
 
 const router = express.Router();
 
-router.post('/logout', async (req: Request, res: Response) => {
-    const { userId, username } = req.user!;
-
-    // Verify user exists
-    const user = await prisma.user.findUnique({
-        where: { id: userId, username }
-    });
-
-    if (!user) {
-        res.status(401).json({ error: 'User not found' });
-        return;
-    }
-
-    // Clear cookie
-    res.clearCookie('auth_token');
+// Public on purpose: logging out must work even when the cookie has expired
+// or is invalid, so a stale cookie can always be removed.
+router.post('/logout', (req: Request, res: Response) => {
+    endSession(res);
     res.status(200).json({ message: 'Logged out successfully!' });
 });
 

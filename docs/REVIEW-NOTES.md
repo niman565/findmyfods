@@ -108,3 +108,62 @@ One section per phase, appended as each phase finishes.
 - **Rows left by a crashed test run are not removed automatically.** The per-file token keeps them from affecting later runs. To clear them, empty the tables in `recipe_app_test` by hand.
 - **The test setup does not check that the test database has every migration.** If a migration is added and `./setup-test-db.sh` is not run, tests fail with a "column does not exist" error.
 - **B0 and T0 changes are both uncommitted**, so `git diff` on `backend/package.json` and the lockfile shows the two phases together.
+
+## B1: Auth routes and session (2026-11-16)
+
+### Files created
+- `backend/src/lib/session.ts`: the one place that signs the token, sets and clears the cookie, and checks a token.
+- `backend/src/routes/auth.ts`: groups login, logout, me and register; mounted at `/api/auth`.
+- `backend/src/routes/me.ts`: `GET /api/auth/me`.
+- `backend/test/auth.test.ts`: 47 tests.
+- `backend/test/helpers/auth.ts`: registers a user and returns a logged-in Supertest agent; cookie and token helpers.
+
+### Files changed
+- `backend/src/routes/login.ts`, `register.ts`: use the session helper; respond with `{ user }`.
+- `backend/src/routes/logout.ts`: public, no database lookup, always clears the cookie.
+- `backend/src/routes/unprotected.ts`: mounts the auth router at `/auth`, plus recipes.
+- `backend/src/routes/protected.ts`: applies the login check to `/favorites` only.
+- `backend/src/middleware/auth_middleware.ts`: uses the shared token check.
+- `backend/src/app.ts`: JSON 404 for unknown `/api` routes; 400 for a malformed JSON body; corrected endpoint list on `/`.
+- `backend/test/helpers/factories.ts`: `credentials()` builds unique user details; `cleanup()` also deletes this file's users.
+- `CLAUDE.md`: API and Status sections.
+- `docs/REVIEW-NOTES.md`: this section.
+
+### Decisions and why
+- **Paths moved to `/api/auth/*`; the old `/api/login`, `/api/register`, `/api/logout` now return 404.** Checked beforehand that nothing in the repo called them.
+- **Separate route files kept** (`login.ts`, `register.ts`, `logout.ts`, `me.ts`), with `auth.ts` only grouping them, as agreed.
+- **Register, login and me all respond with `{ user: { id, username, email } }`.** One shape for the frontend to handle. The previous `message` field on login and register was dropped; nothing used it.
+- **Session is 7 days** for both the token and the cookie (was 1 hour), so users stay logged in between visits.
+- **Cookie is `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Secure` in production.** `SameSite` was previously left to the browser default; it is now explicit. The same attributes are used to clear it, which browsers require for the cookie to actually be removed.
+- **Logout is public and does no database lookup.** Before, a user with an expired or invalid cookie got a 401 and the cookie stayed.
+- **The login check is mounted on `/favorites` only.** Before, it sat on all of `/api`, so every unknown path returned 401.
+- **`me` looks the user up in the database** instead of trusting the token alone, so a deleted user is logged out (401, cookie cleared).
+- **Token contents are validated with Zod and only the HS256 algorithm is accepted.** A correctly signed token with unexpected contents, or an unsigned one, is rejected.
+- **Malformed JSON returns 400** `Request body is not valid JSON` (approved addition; it was a 500).
+- **Ambiguity settled:** the plan described `me` as returning `{id, username, email}` and login/register as returning "the user". Chose the wrapped `{ user }` form for all three.
+
+### Edge cases handled
+- Register: invalid email, 7-character password (and exactly 8 accepted), empty or missing username, missing email, missing password, no body, malformed JSON, duplicate username, duplicate email. Failed attempts set no cookie and create no user.
+- Login: by username, by email; wrong password and unknown user return the identical 401, so the response does not reveal which usernames exist; missing fields, invalid email, empty body, malformed JSON.
+- Me: no cookie, a token that is not a JWT, expired token, token signed with another key, unsigned token, valid signature with wrong contents, user deleted after login.
+- Logout: with a valid cookie, without a cookie, with an invalid or expired cookie; logging in again afterwards works.
+- Favorites routes still return 401 without a cookie or with an expired token, and work with a valid one.
+- Unknown `/api` paths, including under `/api/auth`, return a JSON 404.
+- The password and its hash never appear in any response; the stored hash is Argon2id.
+
+### Verified
+- `npm test`: 70 passed (3 files), three runs in a row. Test database empty before and after; dev database unchanged.
+- `npm run typecheck`, `npm run lint`, `npm run build`: pass.
+- Curl against the dev server (output in the phase summary): register 400/400/400/400/201/409, me 200/401/401, login 401/401/400/200/200, favorites 401/401/201/200, logout 200 with the cookie cleared and me then 401, logout without or with a bad cookie 200, unknown and old paths 404. One throwaway dev user was created and deleted.
+
+### Edge cases noticed but NOT handled
+- **A session cannot be revoked.** Logout clears the cookie, but a copied token stays valid for up to 7 days. Changing a password (not a feature) would not end existing sessions either.
+- **No logout after inactivity** (the 30-minute idea). Sessions are a fixed 7 days and are not extended by activity.
+- **`SameSite=Lax` will not work if the frontend and backend are deployed on different sites** (for example Vercel and Railway). That needs `SameSite=None; Secure` or a shared domain. Deployment is deferred, so left for then.
+- **Emails and usernames are case-sensitive and not trimmed.** `Sam@x.com` and `sam@x.com` can both register, and logging in needs the exact case used at registration.
+- **The duplicate error does not say which field clashed** (username or email); it is one generic 409 message.
+- **Login validation messages are vague.** A missing password returns `Invalid input` with no field name, because of how the username-or-email schema is written.
+- **Sending both `username` and `email` to login returns 400.** The frontend will send one.
+- **No rate limiting on login or register**, and usernames have no length or character rules beyond "not empty".
+- **A user who is already logged in can register or log in again**; the cookie is simply replaced.
+- **CORS is still the bare `cors()`**, so a browser on `localhost:5173` cannot send the cookie yet. That is B2.

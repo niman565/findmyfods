@@ -1,12 +1,9 @@
 import express, { Request, Response } from 'express';
 import * as argon2 from "argon2";
-import * as jwt from "jsonwebtoken";
 
+import { startSession, toPublicUser } from '../lib/session';
 import { prisma } from '../prisma-lib';
 import { UserLoginSchema } from './validation_schemas/User';
-
-const secretKey = process.env.SECRET_KEY;
-if (!secretKey) throw new Error('No secret key found');
 
 const router = express.Router();
 
@@ -24,16 +21,8 @@ router.post('/login', async (req: Request, res: Response) => {
         return;
     }
 
-    const payload = { username: user.username, userId: user.id };
-    const token = jwt.sign(payload, secretKey, { expiresIn: '1h' });
-
-    res.cookie('auth_token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 3600 * 1000,
-    });
-
-    res.json({ message: 'Logged in successfully!' });
+    startSession(res, user);
+    res.json({ user: toPublicUser(user) });
 });
 
 export default router;

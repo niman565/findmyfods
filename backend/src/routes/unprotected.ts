@@ -1,13 +1,11 @@
 import express from 'express';
 
-import LoginRouter from './login';
+import AuthRouter from './auth';
 import RecipeRouter from './recipes';
-import RegisterRouter from './register';
 
 const router = express.Router();
 
-router.use(LoginRouter);
+router.use('/auth', AuthRouter);
 router.use(RecipeRouter);
-router.use(RegisterRouter);
 
 export default router;

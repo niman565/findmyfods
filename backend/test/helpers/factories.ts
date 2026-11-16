@@ -1,6 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../../src/prisma-lib';
 
+export interface Credentials {
+    username: string;
+    email: string;
+    password: string;
+}
+
 interface RecipeInput {
     title: string;
     ingredientNames?: string[];
@@ -8,13 +14,16 @@ interface RecipeInput {
 }
 
 /**
- * Creates test rows and remembers their ids so cleanup() deletes exactly
- * what was created and nothing else.
+ * Creates test rows and removes them again. Recipes and tags are tracked by
+ * id; users are found by the token in their username and email. cleanup()
+ * deletes exactly those rows and nothing else.
  *
  * Every name built with t() carries a random token unique to this instance.
  * Filtering or searching by those names can therefore only match rows this
  * test file created, whatever else is in the database.
  */
+export type TestData = ReturnType<typeof createTestData>;
+
 export function createTestData() {
     const token = `t${randomBytes(4).toString('hex')}`;
     const recipeIds: number[] = [];
@@ -26,6 +35,19 @@ export function createTestData() {
         /** Prefixes a label with this instance's unique token, e.g. "t3fa9c1b2alpha". */
         t(label: string): string {
             return `${token}${label}`;
+        },
+
+        /**
+         * Builds a unique username, email and password. Nothing is created here;
+         * pass them to the register endpoint. cleanup() deletes any user whose
+         * username or email starts with this instance's token.
+         */
+        credentials(label: string): Credentials {
+            return {
+                username: `${token}${label}`,
+                email: `${token}${label}@example.com`,
+                password: 'password123',
+            };
         },
 
         async tag(label: string, category = 'Test Category') {
@@ -58,8 +80,19 @@ export function createTestData() {
             return recipe.id;
         },
 
-        /** Deletes everything this instance created. Recipe-tag links go with their recipe. */
+        /**
+         * Deletes everything this instance created. Recipe-tag links go with
+         * their recipe, and favorites go with their user.
+         */
         async cleanup(): Promise<void> {
+            await prisma.user.deleteMany({
+                where: {
+                    OR: [
+                        { username: { startsWith: token } },
+                        { email: { startsWith: token } },
+                    ],
+                },
+            });
             await prisma.recipe.deleteMany({ where: { id: { in: recipeIds } } });
             await prisma.tag.deleteMany({ where: { id: { in: tagIds } } });
             recipeIds.length = 0;
