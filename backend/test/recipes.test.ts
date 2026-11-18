@@ -15,12 +15,13 @@ interface RecipeBody {
 
 const data = createTestData();
 
-// Three tags (a, b, c) and three recipes, read by every test and deleted at the end:
+// Three tags (a, b, c) and four recipes, read by every test and deleted at the end:
 //   soup:  tags a + b, ingredients kale, salt
 //   salad: tag a,      ingredient rice
 //   bowl:  tags b + c, ingredient kale
+//   first: no tags or ingredients; created last but sorts first by title
 let tagA: string, tagB: string, tagC: string;
-let soup: number, salad: number, bowl: number;
+let soup: number, salad: number, bowl: number, first: number;
 
 beforeAll(async () => {
     const [a, b, c] = await Promise.all([data.tag('a'), data.tag('b'), data.tag('c')]);
@@ -41,6 +42,7 @@ beforeAll(async () => {
         ingredientNames: [data.t('kale')],
         tagIds: [b.id, c.id],
     })).id;
+    first = (await data.recipe({ title: `${data.t('aaa')} First` })).id;
 });
 
 afterAll(async () => {
@@ -67,12 +69,20 @@ describe('GET /api/recipes', () => {
         expect(found?.title).toBe(`${data.t('alpha')} Soup`);
         expect(found?.ingredientNames).toEqual([data.t('kale'), 'salt']);
         expect(found?.tags.map((link) => link.tag.name).sort()).toEqual([tagA, tagB].sort());
-        expect(body.map((r) => r.id)).toEqual(expect.arrayContaining([soup, salad, bowl]));
+        expect(body.map((r) => r.id)).toEqual(expect.arrayContaining([soup, salad, bowl, first]));
     });
 
     it('treats empty tags and search parameters as no filter', async () => {
         const ids = await listIds({ tags: '', search: '' });
         expect(ids).toEqual(expect.arrayContaining([soup, salad, bowl]));
+    });
+
+    it('sorts recipes alphabetically by title', async () => {
+        const res = await request(app).get('/api/recipes');
+
+        // Only this file's recipes, in the order the API returned them.
+        const own = (res.body as RecipeBody[]).filter((r) => [soup, salad, bowl, first].includes(r.id));
+        expect(own.map((r) => r.id)).toEqual([first, soup, salad, bowl]);
     });
 
     describe('?tags (AND logic)', () => {
@@ -90,6 +100,11 @@ describe('GET /api/recipes', () => {
 
         it('returns nothing for a tag that does not exist', async () => {
             expect(await listIds({ tags: data.t('-no-such-tag') })).toEqual([]);
+        });
+
+        it('matches tags whatever case they are typed in', async () => {
+            expect(await listIds({ tags: tagA.toUpperCase() })).toEqual(sorted(soup, salad));
+            expect(await listIds({ tags: `${tagA.toUpperCase()},${tagB}` })).toEqual([soup]);
         });
 
         it('ignores spaces and empty entries in the tag list', async () => {
@@ -156,8 +171,8 @@ describe('GET /api/recipe/:id', () => {
         expect(res.body).toEqual({ error: 'No recipe found for provided id' });
     });
 
-    it('returns 400 for an id that is not a number', async () => {
-        const res = await request(app).get('/api/recipe/abc');
+    it.each(['abc', '1.5', '0', '-1', '99999999999'])('returns 400 for the id "%s"', async (id) => {
+        const res = await request(app).get(`/api/recipe/${id}`);
 
         expect(res.status).toBe(400);
         expect(res.body).toHaveProperty('error');

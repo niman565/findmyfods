@@ -251,6 +251,17 @@ describe('GET /api/auth/me', () => {
         expect(res.status).toBe(401);
     });
 
+    it('returns 401 when the token names a different user than the one with that id', async () => {
+        // What a token from before a database reset looks like: a real id, but
+        // the username belongs to whoever had that id before.
+        const { user } = await registerUser(data, 'reused');
+        const token = signToken({ userId: user.id, username: data.t('previous-owner') });
+        const res = await request(app).get('/api/auth/me').set('Cookie', cookieHeader(token));
+
+        expect(res.status).toBe(401);
+        expect(authSetCookie(res)).toMatch(/^auth_token=;/);
+    });
+
     it('returns 401 and clears the cookie when the user no longer exists', async () => {
         const { agent, user } = await registerUser(data, 'deleted');
         await prisma.user.delete({ where: { id: user.id } });

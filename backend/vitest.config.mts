@@ -14,6 +14,8 @@ export default defineConfig({
             // Test-only signing key. The app never loads backend/.env during
             // tests (only src/index.ts does), so the dev key is not used.
             SECRET_KEY: 'test-only-secret-never-used-outside-tests',
+            // The origin the CORS tests treat as the allowed frontend.
+            CLIENT_ORIGIN: 'http://localhost:5173',
         },
     },
 });

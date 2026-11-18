@@ -10,8 +10,16 @@ import UnprotectedRouter from './routes/unprotected';
 // (dotenv) or by the test config, never here.
 const app: Application = express();
 
+// The one browser origin allowed to call the API with the login cookie.
+// Browsers send the origin without a trailing slash, so one typed into the
+// setting is removed; otherwise the frontend would be silently refused.
+const clientOrigin = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').replace(/\/+$/, '');
+
 // Middleware
-app.use(cors());
+// `credentials: true` lets the browser send the auth cookie. Browsers refuse
+// that for a wildcard origin, so the allowed origin is listed explicitly.
+// Requests from any other origin get no CORS headers.
+app.use(cors({ origin: [clientOrigin], credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -32,6 +40,7 @@ app.get('/', (req: Request, res: Response) => {
       endpoints: {
         recipes: '/api/recipes',
         recipe: '/api/recipe/:id',
+        tags: '/api/tags',
         register: '/api/auth/register',
         login: '/api/auth/login',
         logout: '/api/auth/logout',

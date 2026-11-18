@@ -167,3 +167,99 @@ One section per phase, appended as each phase finishes.
 - **No rate limiting on login or register**, and usernames have no length or character rules beyond "not empty".
 - **A user who is already logged in can register or log in again**; the cookie is simply replaced.
 - **CORS is still the bare `cors()`**, so a browser on `localhost:5173` cannot send the cookie yet. That is B2.
+
+## B2: CORS, GET /api/tags, API hardening (2026-11-16)
+
+### Files created
+- `backend/src/routes/tags.ts`: `GET /api/tags`.
+- `backend/src/routes/validation_schemas/Id.ts`: one shared rule for ids taken from the URL.
+- `backend/test/tags.test.ts` (4 tests), `backend/test/favorites.test.ts` (24), `backend/test/cors.test.ts` (9).
+
+### Files changed
+- `backend/src/app.ts`: CORS limited to the frontend origin, with credentials; `tags` added to the endpoint list on `/`.
+- `backend/src/routes/unprotected.ts`: mounts the tags router.
+- `backend/src/routes/recipes.ts`: tag filter lowercased; list sorted by title.
+- `backend/src/routes/favorites.ts`: flat recipe list with tags, newest first; adding is repeatable; missing recipe returns 404.
+- `backend/src/routes/validation_schemas/Recipe.ts`, `User.ts`: use the shared id rule.
+- `backend/src/middleware/auth_middleware.ts`: confirms the token's user still exists (not in the plan; see Decisions).
+- `backend/src/routes/me.ts`: uses the user the middleware already loaded.
+- `backend/src/types/Request.d.ts`: `req.user` now also carries `email`.
+- `backend/vitest.config.mts`: sets `CLIENT_ORIGIN` for the tests.
+- `backend/test/recipes.test.ts` (+6 tests), `backend/test/auth.test.ts` (+1 test).
+- `CLAUDE.md`, `docs/REVIEW-NOTES.md`.
+
+### Decisions and why
+- **CORS allows exactly one origin**, `CLIENT_ORIGIN`, defaulting to `http://localhost:5173`, with `credentials: true`. A browser will not send cookies to an API that answers with a wildcard origin. Other origins get no `Access-Control-Allow-Origin` header, so browsers block them from reading responses.
+- **`CLIENT_ORIGIN` is not yet in `backend/.env`**; the default is in effect. Add it only if the frontend runs somewhere other than port 5173.
+- **`GET /api/tags` returns `id`, `name`, `category` only**, sorted by category then name. `createdAt` is left out because nothing needs it.
+- **Ids must be whole numbers from 1 to 2147483647** (the largest value the database column holds). Before, `1.5` was silently treated as `1`, and a huge number caused a 500.
+- **Recipes are sorted by title, then id.** Before, the order was whatever the database returned.
+- **`GET /api/favorites` returns recipes in exactly the shape of `/api/recipe/:id`**, so the frontend can use one recipe type and one card component everywhere.
+- **Adding a favorite twice is not an error.** First time 201, after that 200 `Recipe was already favorited`. It was a 409, which the frontend would have had to treat as success anyway. Done with one `createMany(..., skipDuplicates)` so two simultaneous requests cannot create a duplicate or fail.
+- **Removing a favorite that is not there stays a 404**, as planned.
+- **NOT IN THE PLAN: the login check now looks the user up in the database, matching id and username.** Two reasons. First, in B1 `/me` matched on id alone; after a database reset ids start again at 1, so an old cookie could have logged a browser in as a different, new user. The B3 reset would have triggered exactly that. Second, favorites needs to tell "recipe missing" (404) from "user missing" (401). It costs one small query per logged-in request. `req.user` now includes `email`, so `/me` needs no second query.
+- **The recipe list and detail keep their existing tag shape** (`tags: [{ recipeId, tagId, tag: {...} }]`). Flattening it was not in the plan.
+
+### Edge cases handled
+- CORS: preflight and normal requests from the allowed origin; no allow header for another host, another port, `https` instead of `http`, or a look-alike host (`localhost:5173.evil.example.com`); requests with no `Origin` header (curl) still work.
+- Ids on recipe detail, add favorite and remove favorite: `abc`, `1.5`, `0`, `-1`, `99999999999` all return 400.
+- Tag filter: uppercase and mixed-case tag names match.
+- Favorites: empty list; add; add twice; missing recipe; newest first; a user sees only their own; removing one of several; removing twice; removing one that was never added; one user cannot remove another's; all three routes return 401 once the user is deleted; a favorite disappears when its recipe is deleted.
+- Auth: a token whose username does not belong to its id is rejected and the cookie cleared.
+
+### Verified
+- `npm test`: 114 passed (6 files), three runs in a row. Test database empty before and after; dev database unchanged (6 recipes, 35 tags, 0 users, 0 favorites).
+- `npm run typecheck`, `npm run lint`, `npm run build`: pass.
+- Curl against the dev server (output in the phase summary): CORS headers for allowed and disallowed origins; 35 tags in 5 categories; recipes in title order; `?tags=VEGAN,Dinner`; ids 404/400 x5; favorites 401/401/200/201/201/200/404/400 x3, list newest first with tags, delete 200/404/400. One throwaway dev user was created and deleted.
+
+### Edge cases noticed but NOT handled
+- **CORS does not stop a request from being processed**, it only stops a browser on another origin from reading the answer. Requests from other origins still get a 200 from public routes. That is how CORS works; noted so the "blocked" wording is not misread.
+- **`Access-Control-Allow-Credentials: true` is still sent to disallowed origins.** The `cors` package adds it unconditionally. Without an allow-origin header it has no effect.
+- **Only one allowed origin.** A deployed frontend plus local development at the same time would need a list.
+- **No protection against cross-site form posts beyond `SameSite=Lax`.** Lax stops the cookie being sent on cross-site POSTs, which covers the state-changing routes.
+- **Sort order of titles depends on the database's language settings** (for example how capitals and accents are ordered). Fine for English titles.
+- **Searching for part of an ingredient name still finds nothing** (`kal` does not match `kale`). Unchanged; not in the plan.
+- **`/api/recipes` query parameters are parsed by hand, not with Zod.** Existing code; they are cleaned up rather than rejected, so there is nothing to return a 400 for.
+- **Ids such as `1e2` or `0x10` are accepted** as 100 and 16, because of how number conversion works. Harmless: they are valid ids.
+- **No limit on how many recipes the list returns** (no paging). Fine for a seed of 15-20.
+- **`RecipeGeneralSchema` in `validation_schemas/Recipe.ts` is unused.** Left in place.
+- **The tag `food processor` still contains a space.** Decision due in B3.
+
+### Addendum: full B2 verification (2026-11-17 and 2026-11-18)
+
+#### Code review of the B2 diff
+- Re-read every B2 source change against the plan. No logic errors found. Two claims had not actually been tested and were checked against the running server:
+  - **`CLIENT_ORIGIN` with a trailing slash silently broke CORS.** Confirmed: with `http://localhost:5173/` the real frontend got no `Access-Control-Allow-Origin` header, so a browser would have blocked every request. **Fixed** in `backend/src/app.ts` by removing trailing slashes from the setting. New test in `backend/test/cors.test.ts`; confirmed it fails without the fix and passes with it.
+  - **Simultaneous favorites.** The notes claimed two requests at the same moment cannot create a duplicate or fail. Now verified: 5 simultaneous requests for the same recipe gave one 201 and four 200s, and the recipe appears once.
+
+#### Files changed in this addendum
+- `backend/src/app.ts`: trailing-slash fix (one line).
+- `backend/test/cors.test.ts`: +1 test (115 tests in total now).
+- `verify-api.sh` (yours): one line. The repeated-favorite check now expects 200 `already favorited` instead of 409. Nothing else changed; it passes 39 of 39.
+- `scripts/verify-backend.sh`: created and then rewritten (below). **Not to be committed yet**, at your request, until it is confirmed to work for anyone running the project.
+- Removed `backend/.vitest/`, a stray report file from a Vitest JSON-report run I made at the end of B2.
+
+#### `scripts/verify-backend.sh`
+- **Run from anywhere:** `./scripts/verify-backend.sh`. Requirements are listed at the top of the file, and each one is checked first with a message saying how to fix it.
+- **Nothing machine-specific:**
+  - database names, port and allowed origin come from `backend/.env` and `backend/.env.test`
+  - recipe and tag counts come from the dev database
+  - the tags, search words and recipe ids used in the checks are chosen from the live API data, and expected results are worked out from the documented rules
+- **Inputs are chosen to match some recipes but not all**, so a filter or search that wrongly returns everything, or nothing, fails. The first version picked `low-fodmap` and `Low`, which match every placeholder recipe and so proved little.
+- **Works after B3 reseeds** with different recipes, as long as there are at least 2 recipes and one has 2 or more tags.
+- **Runs:**
+  - typecheck, lint, build, and the tests twice
+  - 114 endpoint and database checks, including CORS, two-user isolation, simultaneous favorites, and a deleted user's cookie
+  - cleanup of its own throwaway users, also on interrupt
+  - before-and-after row counts for both databases
+- **Bug found and fixed in the script:** the simultaneous-favorites step used a bare `wait`, which also waited for the backend the script had started itself, so it hung forever. It now waits only for its own requests, and every request has a 30-second limit. The interrupted run cleaned up correctly (2 users deleted, its backend stopped).
+- **Results:**
+  - against your running backend: 129 passed, 0 failed
+  - deliberate failure (the script starting its own backend with a different allowed origin): exactly the 2 expected CORS checks failed, exit code 1
+  - both databases ended with the same row counts every time
+- **Reads the dev `SECRET_KEY`** inside Node to sign two test tokens (an expired one, and one whose username does not match its id). It never prints the key or any connection string.
+
+#### Edge cases noticed but NOT handled
+- **A recipe deleted between the existence check and the insert in `POST /api/favorites/:recipeId` returns 500**, not 404. A database foreign-key error in a very small window, only reachable while recipes are being deleted. Recipes are only changed by the seed, so left alone.
+- **When the script uses a backend that is already running, it cannot scan that backend's log for errors.** It only checks the log of a backend it started itself.
+- **The script needs bash, so it does not run on Windows without WSL or Git Bash.**

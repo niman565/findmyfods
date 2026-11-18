@@ -53,10 +53,11 @@ router.get('/recipes', async (req: Request, res: Response) => {
                     .filter(Boolean)
               : [];
     
+    // Tag names are stored lowercase, so the filter ignores the case it was typed in.
     const tagsQueryArray = tagsArray.map(tag => ({
         tags: {
             some: {
-                tag: { name: tag },
+                tag: { name: tag.toLowerCase() },
             },
         },
     }));
@@ -76,6 +77,8 @@ router.get('/recipes', async (req: Request, res: Response) => {
 
     const recipes = await prisma.recipe.findMany({
         where,
+        // Alphabetical, with id as a tie-breaker so the order is always the same.
+        orderBy: [{ title: 'asc' }, { id: 'asc' }],
         include: {
             tags: {
                 include: {

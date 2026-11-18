@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { IdSchema } from "./Id";
+
 export const UserRegisterSchema = z.object({
     username: z.string().min(1),
     email: z.email(),
@@ -12,5 +14,5 @@ export const UserLoginSchema = z.xor([
 ]);
 
 export const UserFavoriteAddOrDeleteSchema = z.object({
-    recipeId: z.coerce.number()
+    recipeId: IdSchema
 });
